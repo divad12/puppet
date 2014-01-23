@@ -175,7 +175,7 @@ module Puppet
             break
           end
         rescue => detail
-          fail detail, "Could not retrieve file metadata for #{source}: #{detail}"
+          fail detail, "Could not retrieve file metadata for #{source}: #{detail}", detail.backtrace
         end
       end
       fail "Could not retrieve information from environment #{resource.catalog.environment} source(s) #{value.join(", ")}" unless @metadata

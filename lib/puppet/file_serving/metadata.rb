@@ -49,7 +49,31 @@ class Puppet::FileServing::Metadata < Puppet::FileServing::Base
       :mode => 0644
     }.each do |method, default_value|
       define_method method do
-        Puppet::Util::Windows::Security.send("get_#{method}", @path) || default_value
+        begin
+          Puppet::Util::Windows::Security.send("get_#{method}", @path) || default_value
+        rescue Puppet::Util::Windows::Error => detail
+          # Very carefully catch only this one specific error that result from
+          # trying to read permissions on a symlinked file that is on a volume
+          # that does not support ACLs.
+          #
+          # Unfortunately readlink method will not return the target path when
+          # the given path is not the symlink.
+          #
+          # For instance, consider:
+          #   symlink c:\link points to c:\target
+          #   FileSystem.readlink('c:/link') returns 'c:/target'
+          #   FileSystem.readlink('c:/link/file') will NOT return 'c:/target/file'
+          #
+          # Since detecting this up front is costly, since the path in question
+          # needs to be recursively split and tested at each depth in the path,
+          # we catch the one error that will result from trying to read a file
+          # that doesn't have a DACL - 1336 is ERROR_INVALID_DACL
+          #
+          # Note that this affects any manually created symlinks as well as
+          # paths like puppet:///modules
+          return default_value if detail.code == 1336
+          raise
+        end
       end
     end
   end
